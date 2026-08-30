@@ -1,0 +1,56 @@
+{
+	"name": "pi-context-window-manager",
+	"version": "0.1.0",
+	"description": "Intelligent context window management for pi: bash output summarization, silent meta-amnesia pruning, lazy skill/tool loading, cache-safe tail pruning, and per-turn token accounting.",
+	"keywords": [
+		"pi",
+		"pi-package",
+		"extension",
+		"context-window",
+		"tokens",
+		"prompt-cache",
+		"amnesia",
+		"summarization",
+		"lazy-loading"
+	],
+	"license": "MIT",
+	"author": "Atharva Gupta",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Its-Atharva-Gupta/pi-context-window-manager.git"
+	},
+	"files": [
+		"extensions",
+		"README.md",
+		"LICENSE",
+		"docs"
+	],
+	"scripts": {
+		"test": "node test/smoke.mjs",
+		"typecheck": "tsc -p tsconfig.json",
+		"check": "npm run typecheck && npm test",
+		"pack": "npm pack --dry-run"
+	},
+	"pi": {
+		"extensions": [
+			"./extensions"
+		]
+	},
+	"peerDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"typebox": "*"
+	},
+	"devDependencies": {
+		"@earendil-works/pi-ai": "*",
+		"@earendil-works/pi-coding-agent": "*",
+		"@types/node": "^22.0.0",
+		"jiti": "^2.0.0",
+		"tsx": "^4.0.0",
+		"typebox": "*",
+		"typescript": "^5.5.0"
+	},
+	"publishConfig": {
+		"access": "public"
+	}
+}
