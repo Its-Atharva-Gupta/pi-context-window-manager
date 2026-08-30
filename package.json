@@ -1,6 +1,6 @@
 {
 	"name": "pi-context-window-manager",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "Intelligent context window management for pi: bash output summarization, silent meta-amnesia pruning, lazy skill/tool loading, cache-safe tail pruning, and per-turn token accounting.",
 	"keywords": [
 		"pi",

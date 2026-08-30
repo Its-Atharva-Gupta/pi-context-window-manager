@@ -47,6 +47,7 @@ LLM call #2 ──► assistant msg
 | `extensions/model.ts` | Out-of-band aux model calls (active model, `reasoningEffort: "low"`); fail-safe `undefined` on any failure |
 | `extensions/bash.ts` | Requirement 1: bash output interception + sanitization |
 | `extensions/amnesia.ts` | Requirement 2: silent tagging + tail-only pruning |
+| `extensions/write.ts` | Requirement 4: write compression into persistent facts |
 | `extensions/lazy.ts` | Requirement 3: `find_capability` meta-tool, catalogs, skill stripping |
 | `extensions/stats.ts` | Requirement 5: token accounting, widget, persistence |
 | `extensions/util.ts` | Text extraction, chars/4 token estimation, abort-aware timeouts, JSONL log |
@@ -117,14 +118,41 @@ Consequences (deliberate):
   meta-amnesia pruning — unused injections are dropped again.
 - `find_capability` itself is always active.
 
+## Mechanism 4 — Writes → persistent facts
+
+The full file content of a `write` call lives in the assistant message's
+`toolCall` arguments — and stays in context for the rest of the session. Two
+things happen instead:
+
+1. **Strip at the tail.** In the `context` handler, the `content` argument is
+   removed from write toolCalls in the *last* assistant message (path stays).
+   Because that message was the output of the previous LLM call — never its
+   input — the cache prefix (everything before it) is untouched.
+2. **Compress into a fact.** The file is compressed into one line by the
+   out-of-band aux model and injected as a tiny custom message
+   (`ctxwm-fact`) that is never pruned and survives `/resume`:
+   `[Wrote src/model.py — CNN architecture, 3 conv layers, ~80 lines]`
+   If the model call fails, a heuristic fact (path + docstring/comment +
+   line count) is used — memory is never lost.
+
+**Why tail-append instead of a growing block at the top?** Inserting into the
+prefix would shift every later token, invalidating the *entire* KV cache on
+each new fact. Appending at the tail keeps the prefix byte-identical; each
+fact costs ~15 tokens and accumulates as a chronological "what I've done"
+log.
+
+Writes below `PI_CTX_WRITE_MIN_BYTES` pass through untouched (no fact, no
+strip). Write args in a *non-last* assistant message are never stripped
+(mid-array = cache-unsafe), same tradeoff as amnesia.
+
 ## Failure modes
 
 Every aux model path degrades to a safe default — never a crash, never a
 blind drop:
 
-| Failure | Bash | Amnesia |
-|---|---|---|
-| No model / no API key | truncated tail shown | RETAIN |
-| Timeout / abort | truncated tail shown | RETAIN |
-| Malformed tagger reply | — | RETAIN (only `{"decision":"DROP"}` drops) |
-| Extension error | pi logs, agent continues | same |
+| Failure | Bash | Amnesia | Write |
+|---|---|---|---|
+| No model / no API key | truncated tail shown | RETAIN | heuristic fact (path + docstring + lines) |
+| Timeout / abort | truncated tail shown | RETAIN | heuristic fact |
+| Malformed tagger reply | — | RETAIN (only `{"decision":"DROP"}` drops) | — |
+| Extension error | pi logs, agent continues | same | same |

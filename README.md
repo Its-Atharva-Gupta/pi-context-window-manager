@@ -32,11 +32,25 @@ keeps long sessions fast. This extension fixes all three:
 3. **Lazy skill/tool loading** — only one meta-tool (`find_capability`) is
    preloaded. Everything else is injected on demand and removed after the
    task.
-4. **Cache-safe** — pruning only touches a contiguous tail suffix. The stable
+4. **Write compression** — the full file content that a `write` call leaves
+   in its arguments is stripped at the tail and compressed into a persistent
+   "what I've done" fact line:
+   `[Wrote src/model.py — CNN architecture, 3 conv layers, ~80 lines]`.
+   The fact stays for the whole session and survives `/resume`; the file
+   content doesn't.
+5. **Cache-safe** — pruning only touches a contiguous tail suffix. The stable
    prefix (system prompt + early conversation) is byte-identical across
    turns, so the KV prompt cache on earlier turns is never invalidated.
-5. **Token accounting** — per-turn and cumulative savings per mechanism, in a
+6. **Token accounting** — per-turn and cumulative savings per mechanism, in a
    live widget, `/ctx-stats`, a JSONL log, and a persisted snapshot.
+
+In short, the three-tier system:
+
+| Content | Treatment |
+|---|---|
+| Reads (`read`/`grep`/`find`/`ls`) | Meta-amnesia — prune after use |
+| Bash output | Summarize and replace |
+| Writes (`write`) | Compress into a persistent fact line |
 
 ## Install
 
@@ -85,6 +99,7 @@ ctxwm saved 12.7k tok (bash 12.7k · amnesia 0 · lazy 877)
 |---|---|---|
 | Bash summarization | `tool_result` (before result enters context) | Output > threshold → low-reasoning digest; raw bytes never enter session or context |
 | Meta-amnesia | `tool_result` + `context` | Out-of-band retain/drop classification; DROP results pruned from the tail |
+| Write compression | `tool_result` + `context` | File content stripped from write args at the tail; single persistent fact line injected |
 | Lazy tools | `find_capability` tool + `setActiveTools` | Tool spec injected on demand, removed at the next user message |
 | Lazy skills | `before_agent_start` | Skill catalog stripped from system prompt; SKILL.md injected on demand |
 | Token accounting | `turn_start`/`turn_end` | Per-turn savings persisted, logged, and displayed |
@@ -118,6 +133,14 @@ The same filter re-applies after `/resume`.
 
 **Does the agent know it was tagged?** No. Tagging runs as a separate model
 call that never enters the messages array — there is nothing to scrub.
+
+**Where does the "what I've done" block live? Why not at the top of
+context?** Each write appends one tiny fact message at the *tail* of the
+conversation (`[Wrote src/model.py — ..., ~80 lines]`), never pruned, and
+persisted in the session so it survives `/resume`. A growing block at the
+top would shift every later token and invalidate the whole KV cache on each
+new fact — tail-append keeps the prefix byte-identical instead. The `ctxwm`
+widget shows the facts visually if you want to see them.
 
 **How do I know it saved anything?** `/ctx-stats`, the `ctxwm` widget, and
 `~/.pi/agent/logs/ctxwm.jsonl`. See [docs/accounting.md](docs/accounting.md).

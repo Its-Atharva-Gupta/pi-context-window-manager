@@ -20,11 +20,12 @@ export interface TurnStats {
 	bash: number;
 	amnesia: number;
 	lazy: number;
+	write: number;
 	total: number;
 }
 
 export interface StatsSnapshot {
-	cumulative: { bash: number; amnesia: number; lazy: number; total: number };
+	cumulative: { bash: number; amnesia: number; lazy: number; write: number; total: number };
 	turns: TurnStats[];
 }
 
@@ -32,6 +33,7 @@ export interface Cumulative {
 	bash: number;
 	amnesia: number;
 	lazy: number;
+	write: number;
 	total: number;
 }
 
@@ -42,16 +44,16 @@ export function fmtTokens(n: number): string {
 export function widgetLine(c: Cumulative): string {
 	return (
 		`ctxwm saved ${fmtTokens(c.total)} tok ` +
-		`(bash ${fmtTokens(c.bash)} · amnesia ${fmtTokens(c.amnesia)} · lazy ${fmtTokens(c.lazy)})`
+		`(bash ${fmtTokens(c.bash)} · amnesia ${fmtTokens(c.amnesia)} · lazy ${fmtTokens(c.lazy)} · write ${fmtTokens(c.write)})`
 	);
 }
 
 export type StatsApi = ReturnType<typeof createStats>;
 
 export function createStats(pi: ExtensionAPI, cfg: CtxConfig) {
-	const cumulative: Cumulative = { bash: 0, amnesia: 0, lazy: 0, total: 0 };
+	const cumulative: Cumulative = { bash: 0, amnesia: 0, lazy: 0, write: 0, total: 0 };
 	const turns: TurnStats[] = [];
-	const current = { bash: 0, amnesia: 0, lazy: 0 };
+	const current = { bash: 0, amnesia: 0, lazy: 0, write: 0 };
 	// The lazy estimate is computed in before_agent_start (which fires before
 	// the first turn_start), so it must survive beginTurn's reset and be
 	// rolled into the turn total at endTurn.
@@ -79,16 +81,18 @@ export function createStats(pi: ExtensionAPI, cfg: CtxConfig) {
 		current.bash = 0;
 		current.amnesia = 0;
 		current.lazy = 0;
+		current.write = 0;
 	}
 
 	function endTurn(ctx: ExtensionContext | undefined): void {
 		current.lazy = pendingLazy;
 		pendingLazy = 0;
-		const total = current.bash + current.amnesia + current.lazy;
-		turns.push({ turn: turnIndex, bash: current.bash, amnesia: current.amnesia, lazy: current.lazy, total });
+		const total = current.bash + current.amnesia + current.lazy + current.write;
+		turns.push({ turn: turnIndex, bash: current.bash, amnesia: current.amnesia, lazy: current.lazy, write: current.write, total });
 		cumulative.bash += current.bash;
 		cumulative.amnesia += current.amnesia;
 		cumulative.lazy += current.lazy;
+		cumulative.write += current.write;
 		cumulative.total += total;
 		logEvent({
 			kind: "turn",
@@ -96,6 +100,7 @@ export function createStats(pi: ExtensionAPI, cfg: CtxConfig) {
 			bash: current.bash,
 			amnesia: current.amnesia,
 			lazy: current.lazy,
+			write: current.write,
 			total,
 			cumulative: { ...cumulative },
 		});
@@ -111,6 +116,10 @@ export function createStats(pi: ExtensionAPI, cfg: CtxConfig) {
 		current.amnesia += tokens;
 	}
 
+	function recordWrite(originalTokens: number, factTokens: number): void {
+		current.write += Math.max(0, originalTokens - factTokens);
+	}
+
 	function setLazy(tokens: number): void {
 		pendingLazy = Math.max(pendingLazy, tokens);
 	}
@@ -120,6 +129,7 @@ export function createStats(pi: ExtensionAPI, cfg: CtxConfig) {
 		cumulative.bash = snapshot.cumulative.bash ?? 0;
 		cumulative.amnesia = snapshot.cumulative.amnesia ?? 0;
 		cumulative.lazy = snapshot.cumulative.lazy ?? 0;
+		cumulative.write = snapshot.cumulative.write ?? 0;
 		cumulative.total = snapshot.cumulative.total ?? 0;
 		turns.length = 0;
 		turns.push(...(snapshot.turns ?? []));
@@ -130,6 +140,7 @@ export function createStats(pi: ExtensionAPI, cfg: CtxConfig) {
 		endTurn,
 		recordBash,
 		recordAmnesia,
+		recordWrite,
 		setLazy,
 		restore,
 		getCumulative: (): Cumulative => ({ ...cumulative }),

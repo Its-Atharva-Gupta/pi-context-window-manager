@@ -289,6 +289,92 @@ console.log("stats:");
 	ok("stats: persisted snapshot entries", entries.length >= 2 && entries[0].t === "ctxwm-stats");
 }
 
+// ---------- write compression (facts) ----------
+console.log("write:");
+{
+	const handlers = {};
+	let sentFact = null;
+	let writeSaved = 0;
+	const pi = {
+		on: (ev, fn) => { (handlers[ev] ??= []).push(fn); },
+		registerTool: () => {},
+		registerCommand: () => {},
+		appendEntry: () => {},
+		getActiveTools: () => [],
+		getAllTools: () => [],
+		setActiveTools: () => {},
+		sendMessage: (msg, opts) => { sentFact = { msg, opts }; },
+	};
+	const cfg = loadConfig();
+	cfg.writeMinBytes = 100; // make small writes eligible for the test
+	const { registerWriteCompressor } = jiti(`${repoDir}/extensions/write.ts`);
+	registerWriteCompressor(pi, cfg, {
+		recordWrite: (orig, fact) => { writeSaved += orig - fact; },
+		recordBash: () => {}, recordAmnesia: () => {}, setLazy: () => {},
+	});
+	const tagHandler = handlers["tool_result"][0];
+	const ctxHandler = handlers["context"][0];
+
+	const content = '\"\"\"CNN model\"\"\"\nimport torch\nclass CNN(torch.nn.Module):\n    pass\n'.repeat(40);
+	const res = await tagHandler(
+		{ toolCallId: "w1", toolName: "write", input: { path: "src/model.py", content }, details: undefined, isError: false },
+		{ model: undefined, modelRegistry: {}, signal: undefined }, // no aux model -> heuristic fact
+	);
+	ok("write: fact injected via sendMessage (steer)", sentFact !== null && sentFact.opts.deliverAs === "steer");
+	ok("write: fact is a single [Wrote ...] line", sentFact && /^\[Wrote src\/model\.py — .+~\d+ lines\]$/.test(sentFact.msg.content));
+	ok("write: savings recorded", writeSaved > 0);
+
+	// context: content stripped from the last assistant message's write args
+	const out = await ctxHandler({
+		messages: [
+			assistant([...text("writing model"), { type: "toolCall", id: "w1", name: "write", arguments: { path: "src/model.py", content } }]),
+			{ role: "toolResult", toolCallId: "w1", toolName: "write", content: text("Successfully wrote 10 bytes"), isError: false, timestamp: 2 },
+		],
+	}, {});
+	const writeCall = out.messages[0].content.find((b) => b.type === "toolCall" && b.name === "write");
+	ok("write: content stripped from args, path kept", writeCall && writeCall.arguments.content === undefined && writeCall.arguments.path === "src/model.py");
+	ok("write: boundary text preserved", out.messages[0].content.some((b) => b.type === "text"));
+
+	// small write below threshold: untouched, no fact
+	sentFact = null;
+	const small = await tagHandler(
+		{ toolCallId: "w2", toolName: "write", input: { path: "x.txt", content: "tiny" }, details: undefined, isError: false },
+		{ model: undefined, modelRegistry: {}, signal: undefined },
+	);
+	ok("write: small write passes through (no fact, no strip)", sentFact === null);
+	const smallOut = await ctxHandler({
+		messages: [
+			assistant([{ type: "toolCall", id: "w2", name: "write", arguments: { path: "x.txt", content: "tiny" } }]),
+			{ role: "toolResult", toolCallId: "w2", toolName: "write", content: text("ok"), isError: false, timestamp: 2 },
+		],
+	}, {});
+	const out2 = smallOut ?? { messages: [
+		assistant([{ type: "toolCall", id: "w2", name: "write", arguments: { path: "x.txt", content: "tiny" } }]),
+		{ role: "toolResult", toolCallId: "w2", toolName: "write", content: text("ok"), isError: false, timestamp: 2 },
+	] };
+	ok("write: small write args intact", out2.messages[0].content[0].arguments.content === "tiny");
+
+	// cache-safety: write args in a NON-last assistant message are never stripped
+	sentFact = null;
+	const w3 = await tagHandler(
+		{ toolCallId: "w3", toolName: "write", input: { path: "b.ts", content: "x".repeat(500) }, details: undefined, isError: false },
+		{ model: undefined, modelRegistry: {}, signal: undefined },
+	);
+	const out3raw = await ctxHandler({
+		messages: [
+			assistant([{ type: "toolCall", id: "w3", name: "write", arguments: { path: "b.ts", content: "x".repeat(500) } }]),
+			{ role: "toolResult", toolCallId: "w3", toolName: "write", content: text("ok"), isError: false, timestamp: 2 },
+			assistant(text("next step")), // later message -> write call is now mid-array
+		],
+	}, {});
+	const out3 = out3raw ?? { messages: [
+		assistant([{ type: "toolCall", id: "w3", name: "write", arguments: { path: "b.ts", content: "x".repeat(500) } }]),
+		{ role: "toolResult", toolCallId: "w3", toolName: "write", content: text("ok"), isError: false, timestamp: 2 },
+		assistant(text("next step")),
+	] };
+	ok("write: mid-array write args never stripped (cache safety)", out3.messages[0].content[0].arguments.content === "x".repeat(500));
+}
+
 // ---------- pi package manifest resolution ----------
 console.log("package manifest:");
 {

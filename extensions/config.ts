@@ -37,6 +37,15 @@ export interface CtxConfig {
 	/** Cap on how much SKILL.md content is injected into context. */
 	skillMaxChars: number;
 
+	/* ---- 4. Write compression into persistent facts ---- */
+	write: boolean;
+	/** Only compress writes at least this big (small writes pass through untouched). */
+	writeMinBytes: number;
+	/** Output cap for the fact generator. */
+	writeFactMaxTokens: number;
+	/** How much of the written content the fact generator sees. */
+	writeMaxContentChars: number;
+
 	/* ---- Aux model (shared by summarizer + tagger) ---- */
 	/**
 	 * Override the aux model as "provider/id". Default: reuse the user's
@@ -75,6 +84,10 @@ export function loadConfig(): CtxConfig {
 		lazy: bool(process.env.PI_CTX_LAZY, true),
 		lazySkills: bool(process.env.PI_CTX_LAZY_SKILLS, true),
 		skillMaxChars: num(process.env.PI_CTX_SKILL_MAX_CHARS, 8000),
+		write: bool(process.env.PI_CTX_WRITE, true),
+		writeMinBytes: num(process.env.PI_CTX_WRITE_MIN_BYTES, 400),
+		writeFactMaxTokens: num(process.env.PI_CTX_WRITE_FACT_MAX_TOKENS, 32),
+		writeMaxContentChars: num(process.env.PI_CTX_WRITE_MAX_CONTENT_CHARS, 4000),
 		auxModel: process.env.PI_CTX_AUX_MODEL || undefined,
 		auxTimeoutMs: num(process.env.PI_CTX_AUX_TIMEOUT_MS, 20000),
 		statsWidget: bool(process.env.PI_CTX_STATS_WIDGET, true),

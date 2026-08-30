@@ -27,6 +27,10 @@ export PI_CTX_AUX_MODEL=anthropic/claude-haiku-4.5
 | `PI_CTX_LAZY` | `1` | Lazy tool loading via `find_capability`. |
 | `PI_CTX_LAZY_SKILLS` | `1` | Strip the skill catalog from the system prompt; skills load only via `find_capability`. |
 | `PI_CTX_SKILL_MAX_CHARS` | `8000` | Cap on injected `SKILL.md` content. |
+| `PI_CTX_WRITE` | `1` | Enable write compression into persistent facts. |
+| `PI_CTX_WRITE_MIN_BYTES` | `400` | Only compress writes at least this big; smaller writes pass through untouched. |
+| `PI_CTX_WRITE_FACT_MAX_TOKENS` | `32` | Output cap for the fact generator. |
+| `PI_CTX_WRITE_MAX_CONTENT_CHARS` | `4000` | How much of the written file the fact generator sees. |
 | `PI_CTX_AUX_MODEL` | *(active model)* | Override the aux model as `provider/id`. |
 | `PI_CTX_AUX_TIMEOUT_MS` | `20000` | Timeout for aux model calls. |
 | `PI_CTX_STATS_WIDGET` | `1` | Show the savings widget above the editor. |
@@ -39,6 +43,7 @@ Every mechanism can be disabled independently:
 ```bash
 export PI_CTX_BASH=0        # stop summarizing bash output
 export PI_CTX_AMNESIA=0     # stop tagging/pruning (removes the per-tool latency)
+export PI_CTX_WRITE=0       # stop compressing writes (file content stays in toolCall args)
 export PI_CTX_LAZY=0        # stop managing tools (find_capability stays, but nothing is activated)
 export PI_CTX_LAZY_SKILLS=0 # keep skills listed in the system prompt as pi does by default
 export PI_CTX_STATS_WIDGET=0 # hide the widget (accounting still runs, see /ctx-stats)

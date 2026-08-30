@@ -9,8 +9,9 @@ This document explains exactly what each number means — and its limits.
 |---|---|---|
 | **bash** | Context tokens the main agent *didn't* see | `estimateTokens(raw output) − estimateTokens(digest)`, per intercepted result |
 | **amnesia** | Context tokens of messages actually removed | pi's `estimateTokens(message)` for every message (or stripped tool-call block) dropped from the tail |
+| **write** | Context tokens of the stripped file content, minus the fact line | `estimateTokens(file content) − estimateTokens(fact)`, per compressed write |
 | **lazy** | Estimated tokens *not injected* into this turn's context | Sum of `(name + description + parameters JSON + guidelines) / 4` for inactive tool specs, plus the stripped skill-catalog section |
-| **total** | bash + amnesia + lazy | — |
+| **total** | bash + amnesia + lazy + write | — |
 
 Token estimates use pi's own heuristic: **chars/4**, conservative
 (over-estimates). It's an estimate, not provider tokenizer output.
@@ -36,7 +37,7 @@ Every interesting event is one JSON line:
 ```
 
 Event kinds: `bash`, `bash-fallback`, `amnesia-tag`, `amnesia-remove`,
-`lazy`, `turn`.
+`write`, `write-inject-failed`, `lazy`, `turn`.
 
 ## Honest caveats
 
@@ -48,6 +49,10 @@ Event kinds: `bash`, `bash-fallback`, `amnesia-tag`, `amnesia-remove`,
 - **amnesia counts only actual removals.** A RETAIN decision (or a DROP that
   couldn't be pruned because it ended up mid-array) adds 0. This is
   deliberate: only what the model stops seeing counts.
+- **write savings count the file content, not the fact.** The stripped
+  `content` argument is the saving; the ~15-token fact line is the cost of
+  keeping working memory. Facts themselves are tiny and persist for the
+  whole session.
 - **lazy is an avoided-injection estimate.** It estimates the specs and
   skill catalog that *would have* been in the prompt if nothing were lazy. It
   is a model of savings, not a metered value — and it's `0` if your active
