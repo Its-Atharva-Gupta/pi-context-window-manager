@@ -8,6 +8,10 @@ Summarizes huge bash output before it enters context · silently prunes
 forgotten tool results · lazily loads tools and skills on demand ·
 never breaks your prompt cache · tells you exactly how many tokens it saved.
 
+[![npm version](https://img.shields.io/npm/v/pi-context-window-manager?color=blue)](https://www.npmjs.com/package/pi-context-window-manager)
+[![CI](https://github.com/Its-Atharva-Gupta/pi-context-window-manager/actions/workflows/ci.yml/badge.svg)](https://github.com/Its-Atharva-Gupta/pi-context-window-manager/actions)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 </div>
 
 ---
